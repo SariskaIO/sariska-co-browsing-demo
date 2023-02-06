@@ -38,3 +38,27 @@ body{
   font-size:1.2rem;
   color:var(--mainYellow);
 }
+
+.co-browsing {
+  position: fixed;
+  bottom: 10px;
+  right: 10px;
+  background: rgba(255,255,255,0.1);
+  height: 60px;
+  width: 60px;
+  border-radius: 50%;
+  box-shadow: rgba(17, 17, 26, 0.1) 0px 0px 16px;
+  transition: 0.5s all ease;
+  z-index: 9999;
+}
+
+.co-browsing:hover {
+  background: rgba(255, 255, 255, 1);
+}
+
+.co-browsing input{
+  border: none;
+  font-family: 'DM Sans', sans-serif;
+  padding: 10px;
+  box-shadow: rgba(17, 17, 26, 0.1) 0px 0px 16px;
+}
