@@ -8,77 +8,229 @@ import Details from "./components/Details";
 import Cart from "./components/Cart";
 import Default from "./components/Default";
 import Modal from './components/Modal';
-import colly from './img/COLLY_full_svg.svg';
-//import {coBrowsing} from 'sariska-cobrowsing';
-import { POP_UP, SUCCESS_MESSAGE } from './constants';
+import SariskaMediaTransport from "sariska-media-transport";
+import { getToken } from './utils';
+import { useDispatch, useSelector } from 'react-redux';
+import { setDevices } from './store/actions/media';
+import { addLocalTrack } from './store/actions/track';
+import { addConnection } from './store/actions/connection';
+import { setDisconnected } from './store/actions/layout';
+import { addConference } from './store/actions/conference';
+import { setMeeting, setProfile } from './store/actions/profile';
+import { setParticipantCount } from './store/actions/participant';
+import Cobrowsing from './components/Cobrowsing';
+
 
 function App() {
-  const [buttonText, setButtonText] = useState(POP_UP.LOGO);
-  const [state, setState] = useState({
-    //username: localStorage.getItem('username') || '',
-    //session: localStorage.getItem('session') || '',
-    username: '',
-    session: '',
-    divider: false,
-    status: false
-  })
-  let textToBeCopied = window.location.href;
+  const profile = useSelector(state => state.profile);
+  const localTrackRedux = useSelector(state => state.localTrack);
+  const resolution = useSelector(state => state.media?.resolution);
+  const participant = useSelector(state => state.participant);
+  const dispatch = useDispatch();
+  const [loading, setLoading] = useState(false);
+  const [localTracks, setLocalTracks] = useState([]);
 
-  const handleChange = (e) => {
-    const {name, value} = e.target;
-    setState(state => ({...state, [name]: value}));
-  }
-
-  const handleCoBrowsing = () => {
-    if(buttonText === POP_UP.LOGO) {
-      setButtonText(POP_UP.CLOSE);
-      setState(state => ({...state, divider: true}));
-    }
-    if(buttonText === POP_UP.GO){
-      //localStorage.setItem('username', state.username);
-      setButtonText(POP_UP.CLOSE);
-      setState(state => ({...state, divider: false}));
-    }
-    if(buttonText === POP_UP.SEND){
-      //localStorage.setItem('session', state.session);
-      setButtonText(POP_UP.COPY);
-      //coBrowsing.startCoBrowsing(state.username, state.session);
-    }
-    if(buttonText === POP_UP.CLOSE  ) {
-      //coBrowsing.stopCoBrowsing();
-      setButtonText(POP_UP.LOGO);
-      setState(state => ({...state, username: '', session: '', divider: false, status: false}));
-    }
-    if(buttonText === POP_UP.COPY){
-      navigator.clipboard.writeText(textToBeCopied);
-      setButtonText(POP_UP.DONE);
-      setState(state => ({...state, status: true}));
-      setTimeout(()=>setButtonText(POP_UP.CLOSE), 3000);
-    }
-  }
+SariskaMediaTransport.initialize();
+SariskaMediaTransport.setLogLevel(SariskaMediaTransport.logLevels.ERROR);
+  useEffect(() => {
+    SariskaMediaTransport.mediaDevices.enumerateDevices((allDevices) => {
+      dispatch(setDevices(allDevices));
+    });
+  }, []);
 
   useEffect(()=>{
-    if(state.username){
-      setButtonText(POP_UP.GO);
+    if (localTrackRedux.length > 0)  {
+        return;
     }
-    if(state.session){
-      setButtonText(POP_UP.SEND);
-    }
-  },[state.session, state.username])
+    const createNewLocalTracks = async () => {
+        let tracks = [];
+        const options = {
+            devices: ["audio", "video"],
+            resolution
+        };
 
-  console.log('hanlde', state, buttonText, buttonText === POP_UP.GO);
+        try  {
+            const [audioTrack] = await SariskaMediaTransport.createLocalTracks({devices: ["audio"], resolution});
+            tracks.push(audioTrack);
+        } catch(e) {
+            console.log("failed to fetch audio device");
+        }
+
+        try  {
+            const [videoTrack]  = await SariskaMediaTransport.createLocalTracks({devices: ["video"], resolution});
+            tracks.push(videoTrack);
+        } catch(e) {
+            console.log("failed to fetch video device");
+        }
+        setLocalTracks(tracks);
+        tracks.forEach(track=>dispatch(addLocalTrack(track)));
+    };
+    createNewLocalTracks();
+},[])
+
+  const handleNormalMeeting = async () => {
+    setLoading(true);
+
+    const token = await getToken({profile, name: profile.name});
+    const connection = new SariskaMediaTransport.JitsiConnection(
+      token,
+      profile.meetingTitle
+    );
+
+    connection.addEventListener(
+      SariskaMediaTransport.events.connection.CONNECTION_ESTABLISHED,
+      () => { 
+        console.log('connection successful!!!')
+        dispatch(addConnection(connection));
+        createConference(connection, profile.meetingTitle);
+      }
+    );
+
+    connection.addEventListener(
+      SariskaMediaTransport.events.connection.CONNECTION_FAILED,
+      async (error) => {
+        console.log(" CONNECTION_DROPPED_ERROR", error);
+
+        if (
+          error === SariskaMediaTransport.errors.connection.PASSWORD_REQUIRED
+        ) {
+          const token = await getToken({
+            profile, name: profile.name
+          });
+          connection.setToken(token); // token expired, set a new token
+        }
+        if (
+          error ===
+          SariskaMediaTransport.errors.connection.CONNECTION_DROPPED_ERROR
+        ) {
+          dispatch(setDisconnected("lost"));
+        }
+      }
+    );
+
+    connection.addEventListener(
+      SariskaMediaTransport.events.connection.CONNECTION_DISCONNECTED,
+      (error) => {
+        console.log("connection disconnect!!!", error);
+      }
+    );
+
+    connection.connect();
+  };
+
+  const createConference = async (connection, sessionId) => {
+    const conference = connection.initJitsiConference();
+    if(localTracks?.length) localTracks.forEach(async (track) => await conference.addTrack(track));
+    conference.addEventListener(
+      SariskaMediaTransport.events.conference.CONFERENCE_JOINED,
+      () => {
+        setLoading(false);
+        dispatch(addConference(conference));
+        dispatch(setProfile(conference.getLocalUser()));
+        dispatch(setMeeting({ meetingTitle: profile.meetingTitle }));
+      }
+    );
+
+    // conference.addEventListener(
+    //   SariskaMediaTransport.events.conference.USER_ROLE_CHANGED,
+    //   (id) => {
+    //     if (conference.isModerator()) {
+    //       conference.enableLobby();
+    //       navigate(`/colly/${sessionId}`);
+    //     } else {
+    //       navigate(`/colly/${sessionId}`);
+    //     }
+    //   }
+    // );
+
+    conference.addEventListener(
+      SariskaMediaTransport.events.conference.CONFERENCE_ERROR,
+      () => {
+        setLoading(false);
+      }
+    );
+
+    conference.addEventListener(
+      SariskaMediaTransport.events.conference.USER_JOINED,
+      (id) => {
+        console.log('user_joined', id, participant);
+        dispatch(setParticipantCount(1));
+      }
+    );
+
+    conference.addEventListener(
+      SariskaMediaTransport.events.conference.CONFERENCE_FAILED,
+      async (error) => {
+        if (
+          error === SariskaMediaTransport.errors.conference.MEMBERS_ONLY_ERROR
+        ) {
+          conference.joinLobby(profile?.name || conference?.getLocalUser()?.name);
+        }
+        if (
+          error ===
+          SariskaMediaTransport.errors.conference.CONFERENCE_ACCESS_DENIED
+        ) {
+          setLoading(false);
+        }
+      }
+    );
+
+    conference.join();
+  };
+
+
+  useEffect(() => {
+    if (profile.meetingTitle) {
+      handleNormalMeeting();
+    }
+  }, [profile.meetingTitle, localTracks]);
+
   return (
     <React.Fragment>
       <Navbar />
-                <div className={'co-browsing'}>
+          <Cobrowsing />
+                {/* <div className={'co-browsing'}>
                     <div
                     style={{
                         display: 'flex',
                         justifyContent: 'center',
                         alignItems: 'center'
                     }}>
+                      <Box>
+                      <Box>
+                      <video
+                        id='remote-video'
+                        playsInline="1"
+                        autoPlay="1"
+                        style={{
+                          height: "200px",
+                          objectFit: "contain",
+                          borderRadius: "8px",
+                          transform: 'rotateY(180deg)'
+                          // left: "-1px",top: "-1px", width, height, objectFit: 'contain', borderRadius: '8px', transform: 'translate(-75px)'
+                        }}
+                        />
+                        <audio id='remote-audio' playsInline="1" autoPlay='1'/>
+                      </Box>
+                      <Box>
+                        <video
+                        id='local-video'
+                        playsInline="1"
+                        autoPlay="1"
+                        style={{
+                          height: "200px",
+                          objectFit: "contain",
+                          borderRadius: "8px",
+                          transform: 'rotateY(180deg)'
+                          // left: "-1px",top: "-1px", width, height, objectFit: 'contain', borderRadius: '8px', transform: 'translate(-75px)'
+                        }}
+                        />
+                        <audio id='local-audio' playsInline="1" autoPlay='1'/>
+                        </Box>
+                        </Box>
+
+                      <Tooltip title={'hi'} arrow>
                            <button 
-                            onClick={handleCoBrowsing}
                             style={{
                               background: 'none',
                               border: 'none',
@@ -86,76 +238,12 @@ function App() {
                               fontSize: '36px',
                             }}
                             >
-                            {
-                              buttonText === POP_UP.LOGO ? 
-                              <img src={colly} alt='logo' height="34px" />
-                              :
-                              buttonText === POP_UP.CLOSE ? 
-                              <span style={{color: '#0a00a6'}} className="material-symbols-outlined">
-                                close
-                              </span>
-                              :
-                              buttonText === POP_UP.GO ?
-                              <span style={{color: '#0a00a6'}} className="material-symbols-outlined">
-                                navigate_next
-                              </span>
-                              :
-                              buttonText === POP_UP.SEND ?
-                              <span style={{color: '#0a00a6'}} className="material-symbols-outlined">
-                              send
-                              </span>
-                              : 
-                              buttonText === POP_UP.COPY ?
-                              <span style={{color: '#0a00a6'}} className="material-symbols-outlined">
-                              content_copy
-                              </span>
-                              :
-                              buttonText === POP_UP.DONE ?
-                              <span style={{color: '#0a00a6'}} className="material-symbols-outlined">
-                              done_all
-                              </span>
-                              :
-                              null
-                            }
+                            C
                            </button>
+                      </Tooltip>
                     </div>
-                    <div style={{
-                      top: '9px',
-                      position: 'absolute',
-                      left: '-186px',
-                      zIndex: 9999
-                    }}>
-                      {
-                        [POP_UP.CLOSE, POP_UP.GO, POP_UP.SEND].includes(buttonText) ? 
-                          state.status ? 
-                          <input 
-                            value={textToBeCopied}
-                            disabled
-                          /> 
-                          :
-                          <input 
-                              name={ state.divider ? 'username' : 'session'}
-                              value={state.divider ? state.username : state.session }
-                              placeholder={state.divider ? 'Enter your username' : 'Enter session name'}
-                              onChange={handleChange}
-                          /> 
-                        :
-                        buttonText === POP_UP.COPY ?
-                        <input 
-                          value={textToBeCopied}
-                          disabled
-                        /> 
-                        :
-                        buttonText === POP_UP.DONE ?
-                        <input 
-                          value={SUCCESS_MESSAGE}
-                          disabled
-                        /> 
-                        :
-                        null 
-                      }
-                    </div>
-                </div>
+                    
+                </div> */}
       <Switch>
         <Route exact path="/" component={ProductList} />
         <Route path="/details" component={Details} />
