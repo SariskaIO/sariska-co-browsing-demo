@@ -104,11 +104,8 @@ const Cobrowsing = () => {
     oldDevices = devices;
   };
 
-  const audioOutputDeviceChanged = (deviceId) => {
-    SariskaMediaTransport.mediaDevices.setAudioOutputDevice(deviceId);
-  };
-
   const destroy = async () => {
+    console.log("Destroying this", localTracks);
     if (conference?.isJoined()) {
       await conference?.leave();
     }
@@ -122,11 +119,12 @@ const Cobrowsing = () => {
     );
   };
 console.log('vgf', connection)
+console.log('outside confree', conference)
   useEffect(() => {
     if (!conference) {
       return;
     }
-    console.log('confree', conference)
+    console.log('inside confree', conference)
     conference.getParticipantsWithoutHidden().forEach((item) => {
       console.log('hi, item', item);
       if (item._properties?.resolution) {
@@ -141,6 +139,7 @@ console.log('vgf', connection)
     conference.addEventListener(
       SariskaMediaTransport.events.conference.TRACK_REMOVED,
       (track) => {
+        console.log(track, "Remote Remove")
         dispatch(removeRemoteTrack(track));
       }
     );
@@ -148,7 +147,7 @@ console.log('vgf', connection)
     conference.addEventListener(
       SariskaMediaTransport.events.conference.TRACK_ADDED,
       (track) => {
-        console.log('remotett', track);
+        console.log('Remote User Add', track);
         if (track.isLocal()) {
           return;
         }
@@ -193,13 +192,13 @@ console.log('vgf', connection)
       deviceListChanged
     );
 
-    window.addEventListener("beforeunload", destroy);
+    // window.addEventListener("beforeunload", destroy);
 
     return () => {
       console.log('hih', conference, connection, profile )
       destroy();
     };
-  }, []);
+  }, [conference]);
 
 
   useEffect(() => {

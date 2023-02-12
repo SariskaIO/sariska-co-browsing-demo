@@ -125,23 +125,12 @@ SariskaMediaTransport.setLogLevel(SariskaMediaTransport.logLevels.ERROR);
       SariskaMediaTransport.events.conference.CONFERENCE_JOINED,
       () => {
         setLoading(false);
+        console.log(conference, "Inside conference joined")
         dispatch(addConference(conference));
         dispatch(setProfile(conference.getLocalUser()));
         dispatch(setMeeting({ meetingTitle: profile.meetingTitle }));
       }
     );
-
-    // conference.addEventListener(
-    //   SariskaMediaTransport.events.conference.USER_ROLE_CHANGED,
-    //   (id) => {
-    //     if (conference.isModerator()) {
-    //       conference.enableLobby();
-    //       navigate(`/colly/${sessionId}`);
-    //     } else {
-    //       navigate(`/colly/${sessionId}`);
-    //     }
-    //   }
-    // );
 
     conference.addEventListener(
       SariskaMediaTransport.events.conference.CONFERENCE_ERROR,

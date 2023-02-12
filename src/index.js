@@ -5,7 +5,7 @@ import App from './App';
 import { BrowserRouter as Router } from "react-router-dom";
 import {ProductProvider} from './context';
 import * as serviceWorker from './serviceWorker';
-import { coBrowsing } from 'sariska-cobrowsing';
+// import { coBrowsing } from 'sariska-cobrowsing';
 import { store } from './store';
 import { Provider } from 'react-redux';
 
@@ -19,7 +19,6 @@ ReactDOM.render(
     </Provider>,
      document.getElementById('root'));
 
-coBrowsing.startCoBrowsing("user1","dipak");
 
 // If you want your app to work offline and load faster, you can change
 // unregister() to register() below. Note this comes with some pitfalls.
