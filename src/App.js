@@ -9,7 +9,7 @@ import Cart from "./components/Cart";
 import Default from "./components/Default";
 import Modal from './components/Modal';
 import colly from './img/COLLY_full_svg.svg';
-//import {coBrowsing} from 'sariska-cobrowsing';
+import {coBrowsing} from 'sariska-cobrowsing';
 import { POP_UP, SUCCESS_MESSAGE } from './constants';
 
 function App() {
@@ -42,10 +42,10 @@ function App() {
     if(buttonText === POP_UP.SEND){
       //localStorage.setItem('session', state.session);
       setButtonText(POP_UP.COPY);
-      //coBrowsing.startCoBrowsing(state.username, state.session);
+      coBrowsing.startCoBrowsing(state.username, state.session);
     }
     if(buttonText === POP_UP.CLOSE  ) {
-      //coBrowsing.stopCoBrowsing();
+      coBrowsing.stopCoBrowsing();
       setButtonText(POP_UP.LOGO);
       setState(state => ({...state, username: '', session: '', divider: false, status: false}));
     }
